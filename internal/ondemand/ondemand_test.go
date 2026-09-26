@@ -177,3 +177,42 @@ func TestOnDemandLifecycle(t *testing.T) {
 		t.Fatalf("expected state 'asleep' after idle timeout, got %q (err: %v)", string(content), err)
 	}
 }
+
+func TestOnDemandFreshBootTimer(t *testing.T) {
+	tmpDir := t.TempDir()
+	startScript := filepath.Join(tmpDir, "start.sh")
+	stopScript := filepath.Join(tmpDir, "stop.sh")
+	stateFile := filepath.Join(tmpDir, "state")
+
+	startContent := "#!/bin/sh\necho awake > " + stateFile + "\n"
+	stopContent := "#!/bin/sh\necho asleep > " + stateFile + "\n"
+
+	if err := os.WriteFile(startScript, []byte(startContent), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stopScript, []byte(stopContent), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stateFile, []byte("awake\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// On fresh boot, device exists so manager initializes with GPU active
+	mgr, err := NewManager(startScript, stopScript, "100ms")
+	if err != nil {
+		t.Fatalf("NewManager failed: %v", err)
+	}
+	defer mgr.Shutdown()
+
+	if !mgr.gpuActive {
+		t.Fatal("expected gpuActive to be true on fresh boot")
+	}
+
+	// Wait for the fresh-boot idle timer to fire (100ms timeout + buffer)
+	time.Sleep(250 * time.Millisecond)
+
+	content, err := os.ReadFile(stateFile)
+	if err != nil || strings.TrimSpace(string(content)) != "asleep" {
+		t.Fatalf("expected state 'asleep' after fresh boot idle timeout, got %q (err: %v)", string(content), err)
+	}
+}

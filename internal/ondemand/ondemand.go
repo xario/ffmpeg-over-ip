@@ -57,6 +57,10 @@ func NewManager(startScript, stopScript, idleTimeoutStr string) (*Manager, error
 		m.gpuActive = true
 		log.Printf("[ondemand] initialized with GPU active (startScript: %s, stopScript: %s, idleTimeout: %v)",
 			startScript, stopScript, idleTimeout)
+		if m.stopScript != "" && m.idleTimeout > 0 {
+			log.Printf("[ondemand] scheduled initial idle timer for %v", m.idleTimeout)
+			m.idleTimer = time.AfterFunc(m.idleTimeout, m.onIdleTimeout)
+		}
 	} else {
 		m.gpuActive = false
 		log.Printf("[ondemand] initialized with GPU sleeping (startScript: %s, stopScript: %s, idleTimeout: %v)",
