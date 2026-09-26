@@ -13,6 +13,7 @@ import (
 
 	"github.com/steelbrain/ffmpeg-over-ip/internal/auth"
 	"github.com/steelbrain/ffmpeg-over-ip/internal/config"
+	"github.com/steelbrain/ffmpeg-over-ip/internal/ondemand"
 	"github.com/steelbrain/ffmpeg-over-ip/internal/process"
 	"github.com/steelbrain/ffmpeg-over-ip/internal/protocol"
 	"github.com/steelbrain/ffmpeg-over-ip/internal/rewrite"
@@ -75,6 +76,14 @@ func main() {
 		}
 	}()
 
+	ondemandMgr, err := ondemand.NewManager(cfg.StartScript, cfg.StopScript, cfg.IdleTimeout)
+	if err != nil {
+		log.Fatalf("failed to initialize on-demand GPU manager: %v", err)
+	}
+	if ondemandMgr != nil {
+		defer ondemandMgr.Shutdown()
+	}
+
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -85,11 +94,11 @@ func main() {
 			continue
 		}
 
-		go handleConnection(ctx, conn, cfg, ffmpegPath, ffprobePath)
+		go handleConnection(ctx, conn, cfg, ffmpegPath, ffprobePath, ondemandMgr)
 	}
 }
 
-func handleConnection(ctx context.Context, conn net.Conn, cfg *config.ServerConfig, ffmpegPath, ffprobePath string) {
+func handleConnection(ctx context.Context, conn net.Conn, cfg *config.ServerConfig, ffmpegPath, ffprobePath string, ondemandMgr *ondemand.Manager) {
 	defer conn.Close()
 
 	// Read command message
@@ -136,6 +145,17 @@ func handleConnection(ctx context.Context, conn net.Conn, cfg *config.ServerConf
 		log.Printf("[debug] original args: %v", cmd.Args)
 		log.Printf("[debug] rewritten args: %v", args)
 	}
+
+	// Wake GPU only if hardware acceleration / GPU operations are actually required
+	if ondemandMgr != nil && ondemandMgr.RequiresGPU(cmd.Program, args) {
+		if err := ondemandMgr.Acquire(); err != nil {
+			sendError(conn, fmt.Sprintf("failed to wake GPU: %v", err))
+			log.Printf("ondemand acquire failed: %v", err)
+			return
+		}
+		defer ondemandMgr.Release()
+	}
+
 	log.Printf("running %s %v (from %s)", filepath.Base(binaryPath), args, conn.RemoteAddr())
 
 	// Start process

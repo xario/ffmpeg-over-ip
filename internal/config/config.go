@@ -30,11 +30,14 @@ func (l *LogValue) UnmarshalJSON(data []byte) error {
 }
 
 type ServerConfig struct {
-	Log        LogValue    `json:"log"`
-	Address    string      `json:"address"`
-	AuthSecret string      `json:"authSecret"`
-	Rewrites   [][2]string `json:"rewrites"`
-	Debug      bool        `json:"debug"`
+	Log         LogValue    `json:"log"`
+	Address     string      `json:"address"`
+	AuthSecret  string      `json:"authSecret"`
+	Rewrites    [][2]string `json:"rewrites"`
+	Debug       bool        `json:"debug"`
+	StartScript string      `json:"startScript"`
+	StopScript  string      `json:"stopScript"`
+	IdleTimeout string      `json:"idleTimeout"`
 }
 
 type ClientConfig struct {
@@ -111,10 +114,13 @@ func serverConfigFromEnv() *ServerConfig {
 		return nil
 	}
 	return &ServerConfig{
-		Address:    address,
-		AuthSecret: authSecret,
-		Log:        LogValue(os.Getenv("FFMPEG_OVER_IP_SERVER_LOG")),
-		Debug:      parseLaxBool(os.Getenv("FFMPEG_OVER_IP_SERVER_DEBUG")),
+		Address:     address,
+		AuthSecret:  authSecret,
+		Log:         LogValue(os.Getenv("FFMPEG_OVER_IP_SERVER_LOG")),
+		Debug:       parseLaxBool(os.Getenv("FFMPEG_OVER_IP_SERVER_DEBUG")),
+		StartScript: os.Getenv("FFMPEG_OVER_IP_SERVER_START_SCRIPT"),
+		StopScript:  os.Getenv("FFMPEG_OVER_IP_SERVER_STOP_SCRIPT"),
+		IdleTimeout: os.Getenv("FFMPEG_OVER_IP_SERVER_IDLE_TIMEOUT"),
 	}
 }
 
